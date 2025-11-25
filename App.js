@@ -1,20 +1,31 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { StatusBar } from 'react-native';
+import { Provider, useSelector } from 'react-redux';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { store } from './src/store/store';
+import AppNavigator from './src/navigation/AppNavigator';
+import { colors } from './src/utils/colors';
 
-export default function App() {
+function AppContent() {
+  const { isDarkMode } = useSelector((state) => state.theme);
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <>
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        backgroundColor={isDarkMode ? colors.darkBg : colors.white}
+      />
+      <AppNavigator />
+    </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default function App() {
+  return (
+    <Provider store={store}>
+      <SafeAreaProvider>
+        <AppContent />
+      </SafeAreaProvider>
+    </Provider>
+  );
+}
