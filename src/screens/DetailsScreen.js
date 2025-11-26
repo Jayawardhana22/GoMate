@@ -1,318 +1,249 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  FlatList,
+  RefreshControl
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDispatch, useSelector } from 'react-redux';
-import Icon from '../components/Icon'; // <--- Using Custom Icon Component
+import Icon from '../components/Icon';
 
-import { toggleFavorite } from '../store/transportSlice';
+import { toggleFavorite, fetchArrivals, clearArrivals } from '../store/transportSlice';
 import { colors } from '../utils/colors';
 import { getStatusColor } from '../utils/helpers';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function DetailsScreen({ route, navigation }) {
   const { item } = route.params;
   const dispatch = useDispatch();
-  const { favorites } = useSelector((state) => state.transport);
+  
+  // REMOVED 'map' from state
+  const [activeTab, setActiveTab] = useState('status'); 
+  
+  const { favorites, arrivals, arrivalsLoading } = useSelector((state) => state.transport);
   const { isDarkMode } = useSelector((state) => state.theme);
 
   const isFavorite = favorites.some((fav) => fav.id === item.id);
   const statusInfo = item.lineStatuses?.[0] || {};
   const statusColor = getStatusColor(statusInfo.statusSeverityDescription);
 
-  React.useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
+  useEffect(() => {
+    if (activeTab === 'arrivals') {
+      dispatch(fetchArrivals(item.id));
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    return () => dispatch(clearArrivals());
+  }, []);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    return mins === 0 ? 'Due' : `${mins} min`;
+  };
+
+  const renderTabs = () => (
+    <View style={[styles.tabContainer, isDarkMode && styles.tabContainerDark]}>
+      {/* REMOVED 'map' from this list */}
+      {['status', 'arrivals'].map((tab) => (
         <TouchableOpacity
-          onPress={() => dispatch(toggleFavorite(item))}
-          style={styles.headerButton}
+          key={tab}
+          style={[
+            styles.tab,
+            activeTab === tab && styles.activeTab,
+            activeTab === tab && { backgroundColor: `${colors.primary}15` }
+          ]}
+          onPress={() => setActiveTab(tab)}
         >
-          {/* FIX: Changed Feather to Icon */}
-          <Icon
-            name="heart"
-            size={24}
-            color={isFavorite ? colors.error : colors.white}
-            fill={isFavorite ? colors.error : 'transparent'}
-          />
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === tab && styles.activeTabText,
+              isDarkMode && activeTab !== tab && styles.textLight
+            ]}
+          >
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </Text>
         </TouchableOpacity>
-      ),
-    });
-  }, [navigation, isFavorite]);
+      ))}
+    </View>
+  );
+
+  const renderStatusView = () => (
+    <View style={styles.content}>
+      <View style={[styles.card, isDarkMode && styles.cardDark]}>
+        <View style={styles.cardHeader}>
+          <Icon name="activity" size={24} color={colors.primary} />
+          <Text style={[styles.cardTitle, isDarkMode && styles.textDark]}>
+            Current Status
+          </Text>
+        </View>
+
+        <View style={[styles.statusBadgeLarge, { backgroundColor: `${statusColor}15` }]}>
+          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+          <Text style={[styles.statusTextLarge, { color: statusColor }]}>
+            {statusInfo.statusSeverityDescription || 'Unknown Status'}
+          </Text>
+        </View>
+
+        {statusInfo.reason && (
+          <View style={[styles.reasonContainer, isDarkMode && { backgroundColor: colors.darkBg }]}>
+            <Icon name="info" size={16} color={colors.textLight} />
+            <Text style={[styles.reasonText, isDarkMode && styles.textLight]}>
+              {statusInfo.reason}
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderArrivalsView = () => {
+    if (arrivalsLoading) return <LoadingSpinner isDarkMode={isDarkMode} />;
+    
+    if (arrivals.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+           <Icon name="clock" size={48} color={colors.textLight} />
+           <Text style={[styles.emptyText, isDarkMode && styles.textLight]}>No upcoming arrivals</Text>
+        </View>
+      );
+    }
+
+    return (
+      <FlatList
+        data={arrivals}
+        keyExtractor={(item, index) => item.id + index}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={arrivalsLoading} onRefresh={() => dispatch(fetchArrivals(item.id))} />
+        }
+        renderItem={({ item }) => (
+          <View style={[styles.arrivalCard, isDarkMode && styles.cardDark]}>
+            <View style={styles.arrivalLeft}>
+              <View style={[styles.lineNumberBadge, { backgroundColor: colors.primary }]}>
+                <Text style={styles.lineNumberText}>{item.lineName}</Text>
+              </View>
+              <View style={styles.arrivalInfo}>
+                <Text style={[styles.destinationText, isDarkMode && styles.textDark]}>
+                  {item.destinationName}
+                </Text>
+                <Text style={styles.platformText}>{item.platformName}</Text>
+              </View>
+            </View>
+            <View style={styles.arrivalRight}>
+              <Text style={styles.timeText}>{formatTime(item.timeToStation)}</Text>
+              <Icon name="activity" size={14} color={colors.success} />
+            </View>
+          </View>
+        )}
+      />
+    );
+  };
 
   return (
     <View style={[styles.container, isDarkMode && styles.containerDark]}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header Gradient */}
-        <LinearGradient
-          colors={[colors.gradientStart, colors.gradientEnd]}
-          style={styles.header}
-        >
-          <View style={styles.headerContent}>
+      {/* Header */}
+      <LinearGradient
+        colors={[colors.gradientStart, colors.gradientEnd]}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
             <Text style={styles.headerTitle}>{item.name}</Text>
-            <Text style={styles.headerSubtitle}>
-              {item.modeName?.toUpperCase()} LINE
-            </Text>
-          </View>
-        </LinearGradient>
-
-        {/* Content */}
-        <View style={styles.content}>
-          {/* Status Card */}
-          <View style={[styles.card, isDarkMode && styles.cardDark]}>
-            <View style={styles.cardHeader}>
-              <Icon name="activity" size={24} color={colors.primary} />
-              <Text style={[styles.cardTitle, isDarkMode && styles.textDark]}>
-                Current Status
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.statusBadgeLarge,
-                { backgroundColor: `${statusColor}15` },
-              ]}
+            <TouchableOpacity
+              onPress={() => dispatch(toggleFavorite(item))}
+              style={{ marginLeft: 12, padding: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 50 }}
             >
-              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-              <Text style={[styles.statusTextLarge, { color: statusColor }]}>
-                {statusInfo.statusSeverityDescription || 'Unknown Status'}
-              </Text>
-            </View>
-
-            {statusInfo.reason && (
-              <View style={styles.reasonContainer}>
-                <Icon name="info" size={16} color={colors.textLight} />
-                <Text style={[styles.reasonText, isDarkMode && styles.textLight]}>
-                  {statusInfo.reason}
-                </Text>
-              </View>
-            )}
+              <Icon
+                name="heart"
+                size={24}
+                color={isFavorite ? colors.error : colors.white}
+                fill={isFavorite ? colors.error : 'none'}
+              />
+            </TouchableOpacity>
           </View>
-
-          {/* Details Card */}
-          <View style={[styles.card, isDarkMode && styles.cardDark]}>
-            <View style={styles.cardHeader}>
-              <Icon name="list" size={24} color={colors.primary} />
-              <Text style={[styles.cardTitle, isDarkMode && styles.textDark]}>
-                Line Details
-              </Text>
-            </View>
-
-            <View style={styles.detailRow}>
-              <Icon name="map-pin" size={20} color={colors.textLight} />
-              <View style={styles.detailContent}>
-                <Text style={[styles.detailLabel, isDarkMode && styles.textLight]}>
-                  Mode
-                </Text>
-                <Text style={[styles.detailValue, isDarkMode && styles.textDark]}>
-                  {item.modeName?.charAt(0).toUpperCase() + item.modeName?.slice(1)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.detailRow}>
-              <Icon name="tag" size={20} color={colors.textLight} />
-              <View style={styles.detailContent}>
-                <Text style={[styles.detailLabel, isDarkMode && styles.textLight]}>
-                  Line ID
-                </Text>
-                <Text style={[styles.detailValue, isDarkMode && styles.textDark]}>
-                  {item.id}
-                </Text>
-              </View>
-            </View>
-
-            {statusInfo.validityPeriods?.[0] && (
-              <View style={styles.detailRow}>
-                <Icon name="calendar" size={20} color={colors.textLight} />
-                <View style={styles.detailContent}>
-                  <Text style={[styles.detailLabel, isDarkMode && styles.textLight]}>
-                    Valid From
-                  </Text>
-                  <Text style={[styles.detailValue, isDarkMode && styles.textDark]}>
-                    {new Date(
-                      statusInfo.validityPeriods[0].fromDate
-                    ).toLocaleDateString()}
-                  </Text>
-                </View>
-              </View>
-            )}
-          </View>
-
-          {/* Action Button */}
-          <TouchableOpacity
-            style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]}
-            onPress={() => dispatch(toggleFavorite(item))}
-          >
-            {/* FIX: Changed Feather to Icon */}
-            <Icon
-              name="heart"
-              size={20}
-              color={isFavorite ? colors.white : colors.primary}
-              fill={isFavorite ? colors.white : 'transparent'}
-            />
-            <Text
-              style={[
-                styles.favoriteButtonText,
-                isFavorite && styles.favoriteButtonTextActive,
-              ]}
-            >
-              {isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
-            </Text>
-          </TouchableOpacity>
+          <Text style={styles.headerSubtitle}>
+            {item.modeName?.toUpperCase()} LINE
+          </Text>
         </View>
-      </ScrollView>
+      </LinearGradient>
+
+      {/* Tabs */}
+      {renderTabs()}
+
+      {/* Content */}
+      <View style={styles.mainContent}>
+        {activeTab === 'status' && <ScrollView>{renderStatusView()}</ScrollView>}
+        {activeTab === 'arrivals' && renderArrivalsView()}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.lightBg,
-  },
-  containerDark: {
-    backgroundColor: colors.darkBg,
-  },
-  header: {
-    padding: 24,
-    paddingTop: 40,
-    paddingBottom: 60,
-  },
-  headerContent: {
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.white,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-    fontWeight: '500',
-  },
-  headerButton: {
-    marginRight: 16,
-    padding: 4,
-  },
-  content: {
-    padding: 16,
-    marginTop: -40,
-  },
-  card: {
+  container: { flex: 1, backgroundColor: colors.lightBg },
+  containerDark: { backgroundColor: colors.darkBg },
+  header: { padding: 24, paddingTop: 20, paddingBottom: 30 },
+  headerContent: { alignItems: 'center' },
+  headerTitle: { fontSize: 24, fontWeight: 'bold', color: colors.white },
+  headerSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.9)', fontWeight: '500' },
+  
+  tabContainer: {
+    flexDirection: 'row',
     backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    padding: 6,
+    margin: 16,
+    borderRadius: 12,
     elevation: 2,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
   },
-  cardDark: {
-    backgroundColor: colors.darkCard,
-    borderColor: colors.darkBorder,
-    borderWidth: 1,
+  tabContainerDark: { backgroundColor: colors.darkCard },
+  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
+  activeTab: { backgroundColor: colors.lightBg },
+  tabText: { fontWeight: '600', color: colors.textSecondary },
+  activeTabText: { color: colors.primary },
+  textLight: { color: colors.textLight },
+  
+  mainContent: { flex: 1 },
+  content: { padding: 16 },
+  
+  card: {
+    backgroundColor: colors.white, borderRadius: 16, padding: 20, marginBottom: 16,
+    elevation: 2, shadowColor: colors.black, shadowOpacity: 0.1, shadowRadius: 8,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
+  cardDark: { backgroundColor: colors.darkCard, borderWidth: 1, borderColor: colors.darkBorder },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  cardTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary, marginLeft: 12 },
+  textDark: { color: colors.textDark },
+  
+  statusBadgeLarge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12 },
+  statusDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+  statusTextLarge: { fontSize: 16, fontWeight: '600' },
+  reasonContainer: { flexDirection: 'row', marginTop: 16, padding: 12, backgroundColor: colors.lightBg, borderRadius: 8 },
+  reasonText: { flex: 1, marginLeft: 8, fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
+
+  listContent: { padding: 16 },
+  arrivalCard: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: colors.white, padding: 16, borderRadius: 12, marginBottom: 12,
+    elevation: 1, shadowColor: '#000', shadowOpacity: 0.05,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginLeft: 12,
-  },
-  statusBadgeLarge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 10,
-  },
-  statusTextLarge: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  reasonContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: colors.lightBg,
-    borderRadius: 8,
-  },
-  reasonText: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 14,
-    color: colors.textSecondary,
-    lineHeight: 20,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.lightBg,
-  },
-  detailContent: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  detailLabel: {
-    fontSize: 12,
-    color: colors.textLight,
-    marginBottom: 4,
-  },
-  detailValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  favoriteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.white,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
-  },
-  favoriteButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  favoriteButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primary,
-    marginLeft: 8,
-  },
-  favoriteButtonTextActive: {
-    color: colors.white,
-  },
-  textDark: {
-    color: colors.textDark,
-  },
-  textLight: {
-    color: colors.textLight,
-  },
+  arrivalLeft: { flexDirection: 'row', alignItems: 'center' },
+  lineNumberBadge: { width: 45, height: 35, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  lineNumberText: { color: colors.white, fontWeight: 'bold' },
+  arrivalInfo: { justifyContent: 'center' },
+  destinationText: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  platformText: { fontSize: 12, color: colors.textSecondary },
+  arrivalRight: { alignItems: 'flex-end' },
+  timeText: { fontSize: 18, fontWeight: 'bold', color: colors.primary, marginBottom: 4 },
+  
+  emptyState: { alignItems: 'center', marginTop: 60 },
+  emptyText: { marginTop: 16, color: colors.textSecondary },
 });

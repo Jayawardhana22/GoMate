@@ -7,11 +7,26 @@ export const loginUser = createAsyncThunk(
   async ({ username, password }, { rejectWithValue }) => {
     try {
       const data = await authApi.login(username, password);
-      await AsyncStorage.setItem('userToken', data.token);
+     
+      // --- FIX STARTS HERE ---
+     
+      // 1. DummyJSON returns 'accessToken', not 'token'.
+      // We check for both just to be safe.
+      const token = data.accessToken || data.token;
+     
+      if (token) {
+        await AsyncStorage.setItem('userToken', token);
+      } else {
+        console.warn('No access token found in response');
+      }
+      // 2. Save User Data
       await AsyncStorage.setItem('userData', JSON.stringify(data));
+     
+      // --- FIX ENDS HERE ---
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data || 'Login failed');
+      console.error('Redux Error:', error); // Log the actual error
+      return rejectWithValue(error.response?.data || error.message || 'Login failed');
     }
   }
 );
@@ -56,4 +71,4 @@ const authSlice = createSlice({
 });
 
 export const { logout, clearError } = authSlice.actions;
-export default authSlice.reducer;
+export default authSlice.reducer;   
