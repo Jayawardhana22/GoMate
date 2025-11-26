@@ -31,18 +31,34 @@ export default function LoginScreen({ navigation }) {
 
   // Requirement: "Use React Hooks to handle form data"
   const formik = useFormik({
-    initialValues: { username: 'emilys', password: 'emilyspass' },
-    validationSchema: LoginSchema,
-    onSubmit: async (values) => {
-      try {
-        // Unwrap the Redux action to handle success/failure here
-        await dispatch(loginUser(values)).unwrap();
-        // Navigation is handled automatically by AppNavigator when user state changes
-      } catch (err) {
-        Alert.alert('Login Failed', err.message || 'Check your credentials');
-      }
-    },
-  });
+  initialValues: { username: 'emilys', password: 'emilyspass' },
+  validationSchema: LoginSchema,
+  onSubmit: async (values) => {
+    try {
+      // 1. Create a clean version of the data (removes spaces)
+      const cleanData = {
+        username: values.username.trim().toLowerCase(), // Force lowercase and remove spaces
+        password: values.password.trim()                // Remove spaces
+      };
+
+      console.log('Sending Login Data:', cleanData); // Debug log to see what is sent
+
+      // 2. Send the clean data
+      await dispatch(loginUser(cleanData)).unwrap();
+      
+     } catch (err) {
+      console.log('Full Error Object:', err);
+      
+      // If the API returns a message object, show that. Otherwise stringify the error.
+      const errorMessage = err.message || JSON.stringify(err);
+      
+      Alert.alert(
+        'Login Failed', 
+        errorMessage
+      );
+    }
+  },
+});
 
   return (
     <LinearGradient

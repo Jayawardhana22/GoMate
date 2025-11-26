@@ -65,6 +65,14 @@ const MOCK_DATA = [
   }
 ];
 
+// --- ADD MOCK ARRIVALS DATA ---
+const MOCK_ARRIVALS = [
+  { id: '1', lineName: '73', destinationName: 'Oxford Circus', timeToStation: 120, platformName: 'Stop A' }, // 120 seconds = 2 mins
+  { id: '2', lineName: '73', destinationName: 'Victoria', timeToStation: 350, platformName: 'Stop A' },
+  { id: '3', lineName: '390', destinationName: 'Archway', timeToStation: 600, platformName: 'Stop B' },
+  { id: '4', lineName: '73', destinationName: 'Oxford Circus', timeToStation: 900, platformName: 'Stop A' },
+];
+
 export const transportApi = {
   getLineStatus: async (mode = 'tube,bus,train') => {
     try {
@@ -77,17 +85,38 @@ export const transportApi = {
       return MOCK_DATA;
     }
   },
+  // NEW: Get Arrivals for a specific line/station
+  getArrivals: async (lineId) => {
+    try {
+      // In a real app, you would fetch: /Line/{id}/Arrivals
+      console.log(`Fetching arrivals for line ${lineId}...`);
+     
+      // Simulating API delay
+      await new Promise(resolve => setTimeout(resolve, 800));
+     
+      // Return Mock Data randomized slightly for realism
+      return MOCK_ARRIVALS.map(a => ({
+        ...a,
+        lineName: lineId.toUpperCase(), // Match the current line
+        timeToStation: a.timeToStation + Math.floor(Math.random() * 60)
+      })).sort((a, b) => a.timeToStation - b.timeToStation);
+    } catch (error) {
+      console.warn('Arrivals API failed', error);
+      return [];
+    }
+  },
 };
 
 export const authApi = {
   login: async (username, password) => {
     try {
-      console.log('Attempting login with:', username);
+      console.log('API Requesting:', username); 
+      
       const response = await axios.post(
         endpoints.login, 
         {
-          username: username,
-          password: password,
+          username: username, // Use the real variable again
+          password: password, // Use the real variable again
         },
         {
           headers: { 'Content-Type': 'application/json' } 

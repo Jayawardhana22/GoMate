@@ -10,12 +10,26 @@ export const fetchTransportData = createAsyncThunk(
   }
 );
 
+// NEW Thunk
+export const fetchArrivals = createAsyncThunk(
+  'transport/fetchArrivals',
+  async (lineId) => {
+    const data = await transportApi.getArrivals(lineId);
+    return data;
+  }
+);
+
 const transportSlice = createSlice({
   name: 'transport',
   initialState: {
     items: [],
     favorites: [],
     loading: false,
+   
+    // NEW STATE
+    arrivals: [],
+    arrivalsLoading: false,
+   
     error: null,
     searchQuery: '',
   },
@@ -39,6 +53,11 @@ const transportSlice = createSlice({
     setSearchQuery: (state, action) => {
       state.searchQuery = action.payload;
     },
+   
+    // Optional: Clear arrivals when leaving screen
+    clearArrivals: (state) => {
+      state.arrivals = [];
+    }
   },
   extraReducers: (builder) => {
     builder
@@ -53,9 +72,21 @@ const transportSlice = createSlice({
       .addCase(fetchTransportData.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message;
+      })
+      // NEW Handlers for Arrivals
+      .addCase(fetchArrivals.pending, (state) => {
+        state.arrivalsLoading = true;
+      })
+      .addCase(fetchArrivals.fulfilled, (state, action) => {
+        state.arrivalsLoading = false;
+        state.arrivals = action.payload;
+      })
+      .addCase(fetchArrivals.rejected, (state) => {
+        state.arrivalsLoading = false;
+        state.arrivals = [];
       });
   },
 });
 
-export const { toggleFavorite, loadFavorites, setSearchQuery } = transportSlice.actions;
+export const { toggleFavorite, loadFavorites, setSearchQuery, clearArrivals } = transportSlice.actions;
 export default transportSlice.reducer;
